@@ -360,6 +360,9 @@ false
 {{- if $providerConfig.network_config.extra_headers }}
 {{- $_ := set $networkConfig "extra_headers" $providerConfig.network_config.extra_headers }}
 {{- end }}
+{{- if $providerConfig.network_config.extra_body }}
+{{- $_ := set $networkConfig "extra_body" $providerConfig.network_config.extra_body }}
+{{- end }}
 {{- if hasKey $providerConfig.network_config "default_request_timeout_in_seconds" }}
 {{- $_ := set $networkConfig "default_request_timeout_in_seconds" $providerConfig.network_config.default_request_timeout_in_seconds }}
 {{- end }}

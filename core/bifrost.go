@@ -5165,6 +5165,11 @@ func executeRequestWithRetries[T any](
 
 	for attempts = 0; attempts <= config.NetworkConfig.MaxRetries; attempts++ {
 		ctx.SetValue(schemas.BifrostContextKeyNumberOfRetries, attempts)
+		if len(config.NetworkConfig.ExtraBody) > 0 {
+			ctx.SetValue(schemas.BifrostContextKeyExtraBody, config.NetworkConfig.ExtraBody)
+		} else {
+			ctx.SetValue(schemas.BifrostContextKeyExtraBody, nil)
+		}
 
 		// Reset the trail on the first attempt so a reused or shared context (bifrost.ctx)
 		// doesn't carry over records from a previous request.

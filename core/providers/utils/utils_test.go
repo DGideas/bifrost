@@ -912,6 +912,73 @@ func TestMergeExtraParamsIntoJSON_EmptyExtraParams(t *testing.T) {
 	}
 }
 
+type testRequestBody struct {
+	raw []byte
+}
+
+func (t testRequestBody) GetRawRequestBody() []byte {
+	return t.raw
+}
+
+func (t testRequestBody) GetExtraParams() map[string]interface{} {
+	return nil
+}
+
+func TestCheckContextAndGetRequestBody_MergesExtraBody(t *testing.T) {
+	ctx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
+	ctx.SetValue(schemas.BifrostContextKeyExtraBody, map[string]any{
+		"metadata": map[string]any{
+			"tenant": "acme",
+		},
+		"service_tier": "flex",
+	})
+
+	result, bifrostErr := CheckContextAndGetRequestBody(ctx, testRequestBody{}, func() (RequestBodyWithExtraParams, error) {
+		return testRequestBody{}, nil
+	})
+	if bifrostErr != nil {
+		t.Fatalf("CheckContextAndGetRequestBody() error: %v", bifrostErr)
+	}
+
+	var parsed map[string]any
+	if err := sonic.Unmarshal(result, &parsed); err != nil {
+		t.Fatalf("failed to parse merged body: %v", err)
+	}
+	if parsed["service_tier"] != "flex" {
+		t.Fatalf("expected service_tier to be merged, got %v", parsed["service_tier"])
+	}
+	metadata, ok := parsed["metadata"].(map[string]any)
+	if !ok || metadata["tenant"] != "acme" {
+		t.Fatalf("expected metadata.tenant to be merged, got %v", parsed["metadata"])
+	}
+}
+
+func TestCheckContextAndGetRequestBody_MergesExtraBodyIntoRawBody(t *testing.T) {
+	ctx := schemas.NewBifrostContext(context.Background(), schemas.NoDeadline)
+	ctx.SetValue(schemas.BifrostContextKeyUseRawRequestBody, true)
+	ctx.SetValue(schemas.BifrostContextKeyExtraBody, map[string]any{
+		"metadata": map[string]any{
+			"request": "provider-setting",
+		},
+	})
+
+	result, bifrostErr := CheckContextAndGetRequestBody(ctx, testRequestBody{raw: []byte(`{"model":"gpt-4","metadata":{"user":"sam"}}`)}, func() (RequestBodyWithExtraParams, error) {
+		return testRequestBody{}, nil
+	})
+	if bifrostErr != nil {
+		t.Fatalf("CheckContextAndGetRequestBody() error: %v", bifrostErr)
+	}
+
+	var parsed map[string]any
+	if err := sonic.Unmarshal(result, &parsed); err != nil {
+		t.Fatalf("failed to parse merged body: %v", err)
+	}
+	metadata, ok := parsed["metadata"].(map[string]any)
+	if !ok || metadata["user"] != "sam" || metadata["request"] != "provider-setting" {
+		t.Fatalf("expected raw metadata to be deep-merged, got %v", parsed["metadata"])
+	}
+}
+
 // TestParseAndSetRawRequest_CompactsJSON verifies that indented JSON input
 // (with literal newlines from MarshalIndent) is compacted to a single line.
 // This is critical for SSE streaming where newlines break data-line framing.

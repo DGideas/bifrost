@@ -1149,10 +1149,23 @@ func CheckContextAndGetRequestBody(ctx context.Context, request RequestBodyGette
 				}
 			}
 		}
+		if extraBody, ok := ctx.Value(schemas.BifrostContextKeyExtraBody).(map[string]any); ok && len(extraBody) > 0 {
+			var err error
+			jsonBody, err = MergeExtraParamsIntoJSON(jsonBody, extraBody)
+			if err != nil {
+				return nil, NewBifrostOperationError(schemas.ErrProviderRequestMarshal, err)
+			}
+		}
 		return jsonBody, nil
-	} else {
-		return rawBody, nil
 	}
+	if extraBody, ok := ctx.Value(schemas.BifrostContextKeyExtraBody).(map[string]any); ok && len(extraBody) > 0 {
+		var err error
+		rawBody, err = MergeExtraParamsIntoJSON(rawBody, extraBody)
+		if err != nil {
+			return nil, NewBifrostOperationError(schemas.ErrProviderRequestMarshal, err)
+		}
+	}
+	return rawBody, nil
 }
 
 // SetExtraHeadersHTTP sets additional headers from NetworkConfig to the standard HTTP request.

@@ -258,6 +258,7 @@ bifrost:
     #   network_config:
     #     base_url: ""                                  # Custom base URL (required for Ollama)
     #     extra_headers: {}                             # Additional headers to send with requests
+    #     extra_body: {}                                # Additional JSON body fields to merge into requests
     #     default_request_timeout_in_seconds: 300       # Request timeout
     #     max_retries: 3                                # Maximum number of retries
     #     retry_backoff_initial_ms: 500                 # Initial retry backoff in ms
