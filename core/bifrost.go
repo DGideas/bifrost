@@ -40,8 +40,8 @@ import (
 	"github.com/maximhq/bifrost/core/providers/parasail"
 	"github.com/maximhq/bifrost/core/providers/perplexity"
 	"github.com/maximhq/bifrost/core/providers/replicate"
-	"github.com/maximhq/bifrost/core/providers/runway"
 	"github.com/maximhq/bifrost/core/providers/runware"
+	"github.com/maximhq/bifrost/core/providers/runway"
 	"github.com/maximhq/bifrost/core/providers/sgl"
 	providerUtils "github.com/maximhq/bifrost/core/providers/utils"
 	"github.com/maximhq/bifrost/core/providers/vertex"
@@ -5550,6 +5550,11 @@ func executeRequestWithRetries[T any](
 
 	for attempts = 0; attempts <= config.NetworkConfig.MaxRetries; attempts++ {
 		ctx.SetValue(schemas.BifrostContextKeyNumberOfRetries, attempts)
+		if len(config.NetworkConfig.ExtraBody) > 0 {
+			ctx.SetValue(schemas.BifrostContextKeyExtraBody, config.NetworkConfig.ExtraBody)
+		} else {
+			ctx.SetValue(schemas.BifrostContextKeyExtraBody, nil)
+		}
 
 		// Reset the trail on the first attempt so a reused or shared context (bifrost.ctx)
 		// doesn't carry over records from a previous request.

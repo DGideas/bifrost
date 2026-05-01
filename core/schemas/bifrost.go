@@ -243,10 +243,11 @@ const (
 	BifrostContextKeyFallbackIndex                       BifrostContextKey = "bifrost-fallback-index"                 // int (to store the fallback index (set by bifrost - DO NOT SET THIS MANUALLY)) 0 for primary, 1 for first fallback, etc.
 	BifrostContextKeyResolvedAlias                       BifrostContextKey = "bifrost-resolved-alias"                 // *ResolvedAlias (set by bifrost after key-level alias resolution — providers read this for model_family routing and provider-specific overrides; nil/absent when no alias matched)
 	BifrostContextKeyStreamEndIndicator                  BifrostContextKey = "bifrost-stream-end-indicator"           // bool (set by bifrost - DO NOT SET THIS MANUALLY))
-	BifrostContextKeyStreamGated                         BifrostContextKey = "bifrost-stream-gated"                  // bool (set by ctx.PauseStream/ResumeStream/EndStream when a plugin first engages the pause/resume gate; provider helpers use this as a fast-path check to skip Tracer.GateSend on streams that never engage the gate)
+	BifrostContextKeyStreamGated                         BifrostContextKey = "bifrost-stream-gated"                   // bool (set by ctx.PauseStream/ResumeStream/EndStream when a plugin first engages the pause/resume gate; provider helpers use this as a fast-path check to skip Tracer.GateSend on streams that never engage the gate)
 	BifrostContextKeyStreamIdleTimeout                   BifrostContextKey = "bifrost-stream-idle-timeout"            // time.Duration (per-chunk idle timeout for streaming)
 	BifrostContextKeySkipKeySelection                    BifrostContextKey = "bifrost-skip-key-selection"             // bool (will pass an empty key to the provider)
 	BifrostContextKeyExtraHeaders                        BifrostContextKey = "bifrost-extra-headers"                  // map[string][]string
+	BifrostContextKeyExtraBody                           BifrostContextKey = "bifrost-extra-body"                     // map[string]any (provider network_config.extra_body merged into outgoing JSON request bodies)
 	BifrostContextKeyURLPath                             BifrostContextKey = "bifrost-extra-url-path"                 // string
 	BifrostContextKeyUseRawRequestBody                   BifrostContextKey = "bifrost-use-raw-request-body"
 	BifrostContextKeyChangeRequestType                   BifrostContextKey = "bifrost-change-request-type"                      // RequestType (set by plugins to trigger request type conversion in core, e.g. text->chat or chat->responses)
@@ -369,11 +370,11 @@ const (
 
 // RoutingEngine constants
 const (
-	RoutingEngineGovernance      = "governance"
-	RoutingEngineRoutingRule     = "routing-rule"
-	RoutingEngineLoadbalancing   = "loadbalancing"
-	RoutingEngineModelCatalog    = "model-catalog"
-	RoutingEngineCircuitBreaker  = "circuit-breaker"
+	RoutingEngineGovernance     = "governance"
+	RoutingEngineRoutingRule    = "routing-rule"
+	RoutingEngineLoadbalancing  = "loadbalancing"
+	RoutingEngineModelCatalog   = "model-catalog"
+	RoutingEngineCircuitBreaker = "circuit-breaker"
 	// RoutingEngineCore represents the Bifrost core orchestrator's own
 	// routing decisions — primarily fallback transitions. Emitted when the
 	// primary attempt fails and core advances through the fallback chain so

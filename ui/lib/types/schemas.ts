@@ -350,6 +350,7 @@ export const networkConfigSchema = z
 	.object({
 		base_url: z.union([z.string().url("Must be a valid URL"), z.string().length(0)]).optional(),
 		extra_headers: z.record(z.string(), z.string()).optional(),
+		extra_body: z.record(z.string(), z.unknown()).optional(),
 		default_request_timeout_in_seconds: z
 			.number()
 			.min(1, "Timeout must be greater than 0 seconds")
@@ -394,6 +395,7 @@ export const networkFormConfigSchema = z
 			])
 			.optional(),
 		extra_headers: z.record(z.string(), z.string()).optional(),
+		extra_body: z.record(z.string(), z.unknown()).optional(),
 		default_request_timeout_in_seconds: z.coerce
 			.number("Timeout must be a number")
 			.min(1, "Timeout must be greater than 0 seconds")

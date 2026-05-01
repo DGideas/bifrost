@@ -53,12 +53,13 @@ type NetworkConfig struct {
 	// BaseURL is supported for OpenAI, Anthropic, Cohere, Mistral, and Ollama providers (required for Ollama)
 	BaseURL                        string            `json:"base_url,omitempty"`                       // Base URL for the provider (optional)
 	ExtraHeaders                   map[string]string `json:"extra_headers,omitempty"`                  // Additional headers to include in requests (optional)
+	ExtraBody                      map[string]any    `json:"extra_body,omitempty"`                     // Additional JSON body fields to merge into requests (optional)
 	DefaultRequestTimeoutInSeconds int               `json:"default_request_timeout_in_seconds"`       // Default timeout for requests
 	MaxRetries                     int               `json:"max_retries"`                              // Maximum number of retries
 	RetryBackoffInitial            time.Duration     `json:"retry_backoff_initial"`                    // Initial backoff duration (stored as nanoseconds, JSON as milliseconds)
 	RetryBackoffMax                time.Duration     `json:"retry_backoff_max"`                        // Maximum backoff duration (stored as nanoseconds, JSON as milliseconds)
 	InsecureSkipVerify             bool              `json:"insecure_skip_verify,omitempty"`           // Disables TLS certificate verification for provider connections
-	CACertPEM                      *SecretVar           `json:"ca_cert_pem,omitempty"`                    // PEM-encoded CA certificate to trust for provider endpoint connections (supports env.*)
+	CACertPEM                      *SecretVar        `json:"ca_cert_pem,omitempty"`                    // PEM-encoded CA certificate to trust for provider endpoint connections (supports env.*)
 	StreamIdleTimeoutInSeconds     int               `json:"stream_idle_timeout_in_seconds,omitempty"` // Idle timeout per stream chunk (0 = use default 60s)
 	MaxConnsPerHost                int               `json:"max_conns_per_host,omitempty"`             // Max TCP connections per provider host (default: 5000)
 	EnforceHTTP2                   bool              `json:"enforce_http2,omitempty"`                  // Force HTTP/2 on provider connections (relevant for net/http-based providers like Bedrock)
@@ -77,12 +78,13 @@ func (nc *NetworkConfig) UnmarshalJSON(data []byte) error {
 	type NetworkConfigAlias struct {
 		BaseURL                        string            `json:"base_url,omitempty"`
 		ExtraHeaders                   map[string]string `json:"extra_headers,omitempty"`
+		ExtraBody                      map[string]any    `json:"extra_body,omitempty"`
 		DefaultRequestTimeoutInSeconds int               `json:"default_request_timeout_in_seconds"`
 		MaxRetries                     int               `json:"max_retries"`
 		RetryBackoffInitial            json.RawMessage   `json:"retry_backoff_initial"` // string ("500ms") or int (milliseconds)
 		RetryBackoffMax                json.RawMessage   `json:"retry_backoff_max"`     // string ("5s") or int (milliseconds)
 		InsecureSkipVerify             bool              `json:"insecure_skip_verify,omitempty"`
-		CACertPEM                      *SecretVar           `json:"ca_cert_pem,omitempty"`
+		CACertPEM                      *SecretVar        `json:"ca_cert_pem,omitempty"`
 		StreamIdleTimeoutInSeconds     int               `json:"stream_idle_timeout_in_seconds,omitempty"`
 		MaxConnsPerHost                int               `json:"max_conns_per_host,omitempty"`
 		EnforceHTTP2                   bool              `json:"enforce_http2,omitempty"`
@@ -98,6 +100,7 @@ func (nc *NetworkConfig) UnmarshalJSON(data []byte) error {
 	// Copy all non-duration fields
 	nc.BaseURL = alias.BaseURL
 	nc.ExtraHeaders = alias.ExtraHeaders
+	nc.ExtraBody = alias.ExtraBody
 	nc.DefaultRequestTimeoutInSeconds = alias.DefaultRequestTimeoutInSeconds
 	nc.MaxRetries = alias.MaxRetries
 	nc.InsecureSkipVerify = alias.InsecureSkipVerify
@@ -168,6 +171,7 @@ func (nc NetworkConfig) MarshalJSON() ([]byte, error) {
 	type NetworkConfigAlias struct {
 		BaseURL                        string            `json:"base_url,omitempty"`
 		ExtraHeaders                   map[string]string `json:"extra_headers,omitempty"`
+		ExtraBody                      map[string]any    `json:"extra_body,omitempty"`
 		DefaultRequestTimeoutInSeconds int               `json:"default_request_timeout_in_seconds"`
 		MaxRetries                     int               `json:"max_retries"`
 		RetryBackoffInitial            int64             `json:"retry_backoff_initial"` // milliseconds in JSON
@@ -184,6 +188,7 @@ func (nc NetworkConfig) MarshalJSON() ([]byte, error) {
 	alias := NetworkConfigAlias{
 		BaseURL:                        nc.BaseURL,
 		ExtraHeaders:                   nc.ExtraHeaders,
+		ExtraBody:                      nc.ExtraBody,
 		DefaultRequestTimeoutInSeconds: nc.DefaultRequestTimeoutInSeconds,
 		MaxRetries:                     nc.MaxRetries,
 		// Convert time.Duration (nanoseconds) to milliseconds
@@ -253,11 +258,11 @@ const (
 
 // ProxyConfig holds the configuration for proxy settings.
 type ProxyConfig struct {
-	Type      ProxyType `json:"type"`        // Type of proxy to use
-	URL       *SecretVar   `json:"url"`         // URL of the proxy server (supports env.*)
-	Username  *SecretVar   `json:"username"`    // Username for proxy authentication (supports env.*)
-	Password  *SecretVar   `json:"password"`    // Password for proxy authentication (supports env.*)
-	CACertPEM *SecretVar   `json:"ca_cert_pem"` // PEM-encoded CA certificate to trust for TLS connections through the proxy (supports env.*)
+	Type      ProxyType  `json:"type"`        // Type of proxy to use
+	URL       *SecretVar `json:"url"`         // URL of the proxy server (supports env.*)
+	Username  *SecretVar `json:"username"`    // Username for proxy authentication (supports env.*)
+	Password  *SecretVar `json:"password"`    // Password for proxy authentication (supports env.*)
+	CACertPEM *SecretVar `json:"ca_cert_pem"` // PEM-encoded CA certificate to trust for TLS connections through the proxy (supports env.*)
 }
 
 // MarshalForStorage serializes proxy settings for persistence (e.g. proxy_config_json).
@@ -576,11 +581,39 @@ func (config *ProviderConfig) CheckAndSetDefaults() {
 		config.NetworkConfig.ExtraHeaders = headersCopy
 	}
 
+	// Create a defensive copy of ExtraBody to prevent data races
+	if config.NetworkConfig.ExtraBody != nil {
+		config.NetworkConfig.ExtraBody = copyJSONMap(config.NetworkConfig.ExtraBody)
+	}
+
 	// Create a defensive copy of BetaHeaderOverrides to prevent data races
 	if config.NetworkConfig.BetaHeaderOverrides != nil {
 		overridesCopy := make(map[string]bool, len(config.NetworkConfig.BetaHeaderOverrides))
 		maps.Copy(overridesCopy, config.NetworkConfig.BetaHeaderOverrides)
 		config.NetworkConfig.BetaHeaderOverrides = overridesCopy
+	}
+}
+
+func copyJSONMap(src map[string]any) map[string]any {
+	dst := make(map[string]any, len(src))
+	for k, v := range src {
+		dst[k] = copyJSONValue(v)
+	}
+	return dst
+}
+
+func copyJSONValue(v any) any {
+	switch typed := v.(type) {
+	case map[string]any:
+		return copyJSONMap(typed)
+	case []any:
+		copied := make([]any, len(typed))
+		for i, item := range typed {
+			copied[i] = copyJSONValue(item)
+		}
+		return copied
+	default:
+		return v
 	}
 }
 

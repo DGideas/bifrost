@@ -5,6 +5,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { HeadersTable } from "@/components/ui/headersTable";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { DefaultNetworkConfig } from "@/lib/constants/config";
 import { getErrorMessage, setProviderFormDirtyState, useAppDispatch } from "@/lib/store";
@@ -14,7 +15,7 @@ import { networkOnlyFormSchema, type SecretVar, type NetworkOnlyFormSchema } fro
 import { toSecretVarFormValue, toOptionalSecretVarPayload } from "@/lib/utils/secretVarForm";
 import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm, type Resolver } from "react-hook-form";
 import { toast } from "sonner";
 import { buildProviderUpdatePayload } from "../views/utils";
@@ -62,11 +63,27 @@ const secondsToHumanReadable = (seconds: number) => {
 	return parts.join(" ");
 };
 
+const formatExtraBody = (value?: Record<string, unknown>) => {
+	if (!value || Object.keys(value).length === 0) return "";
+	return JSON.stringify(value, null, 2);
+};
+
+const parseExtraBody = (value: string) => {
+	const trimmed = value.trim();
+	if (!trimmed) return undefined;
+	const parsed = JSON.parse(trimmed);
+	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+		throw new Error("Extra Body must be a JSON object");
+	}
+	return parsed as Record<string, unknown>;
+};
+
 export function NetworkFormFragment({ provider }: NetworkFormFragmentProps) {
 	const dispatch = useAppDispatch();
 	const hasUpdateProviderAccess = useRbac(RbacResource.ModelProvider, RbacOperation.Update);
 	const [updateProvider, { isLoading: isUpdatingProvider }] = useUpdateProviderMutation();
 	const isCustomProvider = !isKnownProvider(provider.name as string);
+	const [extraBodyRaw, setExtraBodyRaw] = useState(() => formatExtraBody(provider.network_config?.extra_body));
 
 	const form = useForm<NetworkOnlyFormSchema, any, NetworkOnlyFormSchema>({
 		resolver: zodResolver(networkOnlyFormSchema) as Resolver<NetworkOnlyFormSchema, any, NetworkOnlyFormSchema>,
@@ -76,6 +93,7 @@ export function NetworkFormFragment({ provider }: NetworkFormFragmentProps) {
 			network_config: {
 				base_url: provider.network_config?.base_url || undefined,
 				extra_headers: provider.network_config?.extra_headers,
+				extra_body: provider.network_config?.extra_body,
 				default_request_timeout_in_seconds:
 					provider.network_config?.default_request_timeout_in_seconds ?? DefaultNetworkConfig.default_request_timeout_in_seconds,
 				max_retries: provider.network_config?.max_retries ?? DefaultNetworkConfig.max_retries,
@@ -97,6 +115,8 @@ export function NetworkFormFragment({ provider }: NetworkFormFragmentProps) {
 	}, [form.formState.isDirty, dispatch]);
 
 	const onSubmit = (data: NetworkOnlyFormSchema) => {
+		const extraBody = data.network_config?.extra_body;
+
 		const requiresBaseUrl = isCustomProvider;
 		if (requiresBaseUrl && (data.network_config?.base_url ?? "").trim() === "") {
 			if ((provider.network_config?.base_url ?? "").trim() !== "") {
@@ -112,6 +132,7 @@ export function NetworkFormFragment({ provider }: NetworkFormFragmentProps) {
 				...provider.network_config,
 				base_url: data.network_config?.base_url || undefined,
 				extra_headers: data.network_config?.extra_headers || undefined,
+				extra_body: extraBody,
 				default_request_timeout_in_seconds:
 					data.network_config?.default_request_timeout_in_seconds ?? DefaultNetworkConfig.default_request_timeout_in_seconds,
 				max_retries: data.network_config?.max_retries ?? 0,
@@ -130,7 +151,14 @@ export function NetworkFormFragment({ provider }: NetworkFormFragmentProps) {
 			.unwrap()
 			.then(() => {
 				toast.success("Provider configuration updated successfully");
-				form.reset(data);
+				setExtraBodyRaw(formatExtraBody(extraBody));
+				form.reset({
+					...data,
+					network_config: {
+						...data.network_config,
+						extra_body: extraBody,
+					},
+				});
 			})
 			.catch((err) => {
 				toast.error("Failed to update provider configuration", {
@@ -140,11 +168,13 @@ export function NetworkFormFragment({ provider }: NetworkFormFragmentProps) {
 	};
 
 	useEffect(() => {
+		setExtraBodyRaw(formatExtraBody(provider.network_config?.extra_body));
 		// Reset form with new provider's network_config when provider.name changes
 		form.reset({
 			network_config: {
 				base_url: provider.network_config?.base_url || undefined,
 				extra_headers: provider.network_config?.extra_headers,
+				extra_body: provider.network_config?.extra_body,
 				default_request_timeout_in_seconds:
 					provider.network_config?.default_request_timeout_in_seconds ?? DefaultNetworkConfig.default_request_timeout_in_seconds,
 				max_retries: provider.network_config?.max_retries ?? DefaultNetworkConfig.max_retries,
@@ -448,6 +478,57 @@ export function NetworkFormFragment({ provider }: NetworkFormFragmentProps) {
 											disabled={!hasUpdateProviderAccess}
 										/>
 									</FormControl>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+						<FormField
+							control={form.control}
+							name="network_config.extra_body"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>Extra Body</FormLabel>
+									<FormControl>
+										<Textarea
+											placeholder={`{
+  "metadata": {
+    "tenant": "acme"
+  }
+}`}
+											className="min-h-32 font-mono text-xs"
+											lang="json"
+											value={extraBodyRaw}
+											disabled={!hasUpdateProviderAccess}
+											onChange={(e) => {
+												const value = e.target.value;
+												setExtraBodyRaw(value);
+												try {
+													const parsed = parseExtraBody(value);
+													field.onChange(parsed);
+													form.clearErrors("network_config.extra_body");
+												} catch (err) {
+													form.setError("network_config.extra_body", {
+														type: "manual",
+														message: err instanceof Error ? err.message : "Extra Body must be valid JSON",
+													});
+												}
+											}}
+											onBlur={() => {
+												field.onBlur();
+												try {
+													const parsed = parseExtraBody(extraBodyRaw);
+													field.onChange(parsed);
+													form.clearErrors("network_config.extra_body");
+												} catch (err) {
+													form.setError("network_config.extra_body", {
+														type: "manual",
+														message: err instanceof Error ? err.message : "Extra Body must be valid JSON",
+													});
+												}
+											}}
+										/>
+									</FormControl>
+									<FormDescription>JSON object merged into every outgoing provider request body.</FormDescription>
 									<FormMessage />
 								</FormItem>
 							)}

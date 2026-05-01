@@ -2987,6 +2987,10 @@
           },
           "description": "Additional headers to send with requests"
         },
+        "extra_body": {
+          "type": "object",
+          "description": "Additional JSON object fields to deep-merge into outgoing provider request bodies"
+        },
         "default_request_timeout_in_seconds": {
           "type": "integer",
           "minimum": 1,
@@ -3055,6 +3059,10 @@
             "type": "string"
           },
           "description": "Additional headers to send with requests"
+        },
+        "extra_body": {
+          "type": "object",
+          "description": "Additional JSON object fields to deep-merge into outgoing provider request bodies"
         },
         "default_request_timeout_in_seconds": {
           "type": "integer",
